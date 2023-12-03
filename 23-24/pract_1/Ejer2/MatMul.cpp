@@ -23,10 +23,10 @@ void Init_Mat_Inf(int dim, float *M);
 void Multiplicar_Matrices(float *A, float *B, float *C, int dim);
 
 void Multiplicar_Matrices_Paralelo_omp (float *A, float *B, float *C, int dim);
-void Multiplicar_Matrices_Paralelo_cpp (float *A, float *B, float *C, int dim);
+void Multiplicar_Matrices_Paralelo_cpp (float *A, float *B, float *C, int dim, int numHilo);
 
 void Multiplicar_Matrices_Inf(float *A, float *B, float *C, int dim);
-//void Multiplicar_Matrices_Inf_Paralelo(float *A, float *B, float *C, int dim);
+void Multiplicar_Matrices_Inf_Paralelo(float *A, float *B, float *C, int dim);
 void Escribir_Matriz(float *M, int dim);
 float Calcula_Maximo(float *M, int dim);
 /************************************************************/
@@ -68,6 +68,18 @@ int main (int argc, char ** argv)
   Escribir_Matriz (A, dim);
   printf ("Matriz B\n");
   Escribir_Matriz (B, dim);
+
+	std::thread threads[NTHREADS];
+
+    for(auto i = 0; i<NTHREADS; i++){
+        
+        threads[i] = std::thread(Multiplicar_Matrices_Paralelo_cpp, A, B, C, dim, i);   
+    }
+    Multiplicar_Matrices_Paralelo_cpp(A, B, C, dim, NTHREADS);
+
+    for(auto j = 0; j<NTHREADS;j++){
+        threads[j].join();
+    }
 
   Multiplicar_Matrices (A, B, C, dim);
   printf ("Matriz Resultado correcto\n");
@@ -210,6 +222,8 @@ void Multiplicar_Matrices_Inf (float *A, float *B, float *C, int dim)
 {
 	int i, j, k;
 
+
+
 	for (i=0; i < dim; i++)
 		for (j=0; j < dim; j++)
 			C[i*dim+j] = 0.0;
@@ -220,6 +234,49 @@ void Multiplicar_Matrices_Inf (float *A, float *B, float *C, int dim)
 				C[i*dim+j] += A[i*dim+k] * B[j+k*dim];
 }
 
+
+void Multiplicar_Matrices_Inf_paralelo_cpp (float *A, float *B, float *C, int dim,int numHilo)
+{
+	int i, j, k;
+
+	int elementos = dim/NTHREADS;
+	int inicio = numHilo * elementos;
+	
+	//si la division de dim/NTHREADS no es entera hay que hacer que un hilo salve las iteraciones que faltan
+	if((numHilo==NTHREADS-1)&& dim%NTHREADS != 0){
+		elementos += dim%NTHREADS;
+	}
+	int fin = (numHilo + 1) * elementos;
+
+	for (i=inicio; i < fin; i++)
+		for (j=0; j < dim; j++)
+			C[i*dim+j] = 0.0;
+
+	for (i=inicio+1; i < fin; i++)
+		for (j=1; j < dim; j++)
+			for (k=0; k < i; k++)
+				C[i*dim+j] += A[i*dim+k] * B[j+k*dim];
+}
+
+void Multiplicar_Matrices_Inf_paralelo_omp (float *A, float *B, float *C, int dim)
+{
+	int i, j, k;
+	#pragma omp parallel num_threads(omp_get_max_threads()) shared(C,A,B) private (i,j,k)
+	{
+		#pragma omp for
+		for (i=0; i < dim; i++)
+			for (j=0; j < dim; j++)
+				C[i*dim+j] = 0.0;
+		#pragma omp for
+		for (i=1; i < dim; i++)
+			for (j=1; j < dim; j++)
+				for (k=0; k < i; k++)
+					C[i*dim+j] += A[i*dim+k] * B[j+k*dim];
+
+	}
+
+	
+}
 
 
 
